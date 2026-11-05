@@ -114,7 +114,12 @@
 
   let state = 'menu'; // menu | ready | playing | paused | gameover | win
   let score = 0, lives = 3, level = 1;
-  let paddle, balls, bricks, particles, powerups, lasers, shake = 0, time = 0;
+  let paddle, balls, bricks, particles, powerups, lasers, shake = 0, shakeStart = 0, time = 0;
+  const SHAKE_MAX_MS = 3000; // дрожание не длится дольше 3 секунд
+  function addShake(amount) {
+    if (shake <= 0.5) shakeStart = performance.now(); // отсчёт начинается с нового удара
+    shake = Math.min(8, Math.max(shake, amount));
+  }
   let mouseX = W / 2;
   const keys = {};
 
@@ -241,7 +246,8 @@
   }
 
   function speedFor() {
-    return 6.2 + (level - 1) * 0.35;
+    // Скорость мяча снижена на 35%
+    return (6.2 + (level - 1) * 0.35) * 0.65;
   }
 
   // ---------- HUD / оверлей ----------
@@ -306,10 +312,18 @@
   }
 
   // ---------- Обновление ----------
+  // Затухание дрожания крутится в каждом кадре, независимо от состояния игры,
+  // и жёстко ограничено тремя секундами от первого удара серии.
+  function tickShake() {
+    if (shake <= 0) { shake = 0; return; }
+    if (performance.now() - shakeStart > SHAKE_MAX_MS) { shake = 0; return; }
+    shake *= 0.88;
+    if (shake < 0.15) shake = 0;
+  }
+
   function update() {
     time++;
     stars.forEach(s => { s.y += s.z * 0.4; if (s.y > H) { s.y = 0; s.x = Math.random() * W; } });
-    if (shake > 0) shake *= 0.85;
 
     // Движение платформы
     const speedKey = 9;
@@ -381,7 +395,7 @@
         b.y = PADDLE_Y - b.r;
         beep(520 + rel * 80, 0.05, 'square', 0.06);
         burst(b.x, PADDLE_Y, '#7b5cff', 8, 2.5);
-        shake = 3;
+        addShake(2.5);
       }
     }
 
@@ -411,7 +425,7 @@
 
     if (balls.length === 0) {
       lives--;
-      shake = 12;
+      addShake(6);
       beep(140, 0.4, 'sawtooth', 0.12);
       updateHUD();
       if (lives <= 0) {
@@ -468,7 +482,7 @@
       b.alive = false;
       score += 10 * level;
       burst(b.x + b.w / 2, b.y + b.h / 2, b.color[0], 22, 5);
-      shake = 4;
+      addShake(3.5);
       maybeDrop(b);
       updateHUD();
     } else {
@@ -621,6 +635,7 @@
 
   // ---------- Цикл ----------
   function loop() {
+    tickShake();
     if (state === 'playing') update();
     else if (state === 'ready') {
       // Платформа двигается даже в ожидании
